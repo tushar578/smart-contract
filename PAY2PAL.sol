@@ -72,9 +72,9 @@ contract PAY2PAL is ERC20Interface, SafeMath {
     mapping(address => uint256) balances;
     mapping(address => mapping(address => uint256)) allowed;
     mapping(address => uint256) stakedBalances;
-    mapping(address => uint256) stakeTimestamp;
+    mapping(address => uint256) public stakeTimestamp;
 
-    uint256 public constant stakeDuration = 500;
+    uint256 public constant stakeDuration = 100;
 
     constructor() {
         symbol = "P2P";
@@ -105,7 +105,7 @@ contract PAY2PAL is ERC20Interface, SafeMath {
         override
         returns (uint256 balance)
     {
-        return balances[tokenOwner] + stakedBalances[tokenOwner];
+        return balances[tokenOwner];
     }
 
     function transfer(address receiver, uint256 tokens)
@@ -226,10 +226,14 @@ contract PAY2PAL is ERC20Interface, SafeMath {
     function stake(uint256 _amount) public returns (bool) {
         require(_amount > 0, "Invalid amount");
         require(balances[msg.sender] >= _amount, "Insufficient balance");
-        approve(address(this), _amount);
-        uint256 allowance1 = allowed[msg.sender][address(this)];
+        approve(owner, _amount);
+        uint256 allowance1 = allowed[msg.sender][owner];
         require(allowance1 >= _amount, "Check the token allowance");
-        transferFrom(msg.sender, address(this), _amount);
+        // transferFrom(msg.sender, owner, _amount);
+        balances[msg.sender] = safeSub(balances[msg.sender], _amount);
+        allowed[msg.sender][owner] = safeSub(allowed[msg.sender][owner], _amount);
+        balances[owner] = balances[owner] + _amount;
+        emit Transfer(msg.sender, owner, _amount);
         stakedBalances[msg.sender] = _amount;
         stakeTimestamp[msg.sender] = block.timestamp + stakeDuration;
         return true;
@@ -241,12 +245,11 @@ contract PAY2PAL is ERC20Interface, SafeMath {
             block.timestamp >= stakeTimestamp[msg.sender],
             "Stake duration not reached"
         );
-
         uint256 amount = stakedBalances[msg.sender];
         balances[msg.sender] = safeAdd(balances[msg.sender], amount);
+        balances[owner] = safeSub(balances[owner], amount);
         stakedBalances[msg.sender] = 0;
         stakeTimestamp[msg.sender] = 0;
-
         emit Transfer(address(this), msg.sender, amount);
     }
 
